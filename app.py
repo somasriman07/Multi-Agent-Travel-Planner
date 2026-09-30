@@ -1,18 +1,17 @@
 from pathlib import Path
 import traceback
+import mimetypes
 import uvicorn
 
 from fastapi import FastAPI, Request
-from fastapi.responses import HTMLResponse, JSONResponse
-from fastapi.staticfiles import StaticFiles
+from fastapi.responses import HTMLResponse, JSONResponse, Response
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel
 
 from backend import run_travel_agent
-import nest_asyncio
-nest_asyncio.apply()
 
 BASE_DIR = Path(__file__).resolve().parent
+STATIC_DIR = BASE_DIR / "static"
 
 app = FastAPI(
     title="TripMate AI",
@@ -20,17 +19,33 @@ app = FastAPI(
     version="1.0.0"
 )
 
-
-app.mount(
-    "/static",
-    StaticFiles(directory=str(BASE_DIR / "static")),
-    name="static"
-)
-
-
 templates = Jinja2Templates(
     directory=str(BASE_DIR / "templates")
 )
+
+
+@app.get("/static/{filename:path}")
+async def static_files(filename: str):
+    """Serve static files by reading content directly — avoids anyio thread issues."""
+    file_path = STATIC_DIR / filename
+    # Resolve and guard against path traversal
+    try:
+        file_path = file_path.resolve()
+        STATIC_DIR.resolve()
+        if not str(file_path).startswith(str(STATIC_DIR.resolve())):
+            return Response(status_code=403)
+    except Exception:
+        return Response(status_code=400)
+
+    if not file_path.exists() or not file_path.is_file():
+        return Response(status_code=404)
+
+    media_type, _ = mimetypes.guess_type(str(file_path))
+    content = file_path.read_bytes()
+    return Response(
+        content=content,
+        media_type=media_type or "application/octet-stream"
+    )
 
 
 
@@ -63,7 +78,7 @@ async def travel_planner(request_data: TravelRequest):
                 }
             )
 
-        result = run_travel_agent(
+        result = await run_travel_agent(
             user_input=user_message,
             thread_id=request_data.thread_id
         )

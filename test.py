@@ -20,9 +20,8 @@
 
 
 import asyncio
-from mcp_client_test import get_tavily_search_tool,tavily_mcp_search
+from mcp_client import get_all_tools
 
 if __name__=="__main__":
-    query = input("Type here...")
-    result = asyncio.run(tavily_mcp_search(query=query))
-    print(result)
+    asyncio.run(get_all_tools())
+    
